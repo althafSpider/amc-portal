@@ -63,12 +63,29 @@ export class NotificationsService {
   /**
    * Publish a notification to a specific user.
    * Persists to DB and delivers in-memory to any connected SSE clients for this user.
+   * Also dispatches to all global notification recipients automatically.
+   *
+   * @param skipGlobalDispatch - Set to true when calling from sendToAllUsers to prevent
+   *   duplicate notifications (sendToAllUsers already covers global users).
    */
-  async sendNotification(userId: string, payload: NotificationPayload): Promise<NotificationEvent> {
+  async sendNotification(userId: string, payload: NotificationPayload, skipGlobalDispatch = false): Promise<NotificationEvent> {
+    const event = await this.persistAndDeliver(userId, payload);
+
+    if (!skipGlobalDispatch) {
+      // Always notify global recipients (excluding the original recipient to avoid duplicates)
+      await this.notifyGlobalRecipients(payload, userId);
+    }
+
+    return event;
+  }
+
+  /**
+   * Core persist + SSE delivery logic shared by both sendNotification and notifyGlobalRecipients.
+   */
+  private async persistAndDeliver(userId: string, payload: NotificationPayload): Promise<NotificationEvent> {
     const id = uuid();
     const now = new Date();
 
-    // Persist to database
     try {
       await this.db
         .insertInto('in_app_notifications')
@@ -87,7 +104,6 @@ export class NotificationsService {
       this.logger.error(`Failed to persist notification for user ${userId}`, err);
     }
 
-    // Build the event to emit via SSE
     const event: NotificationEvent = {
       id,
       type: payload.type,
@@ -109,7 +125,42 @@ export class NotificationsService {
   }
 
   /**
+   * Send a notification to all users on the global notification recipients list.
+   * Optionally excludes one or more user IDs to avoid duplicate delivery.
+   */
+  private async notifyGlobalRecipients(payload: NotificationPayload, excludeUserIds?: string | string[]): Promise<void> {
+    let query = this.db
+      .selectFrom('global_notification_users')
+      .innerJoin('users', 'users.id', 'global_notification_users.user_id')
+      .select('global_notification_users.user_id')
+      .where('users.is_active', '=', true);
+
+    if (excludeUserIds) {
+      const ids = Array.isArray(excludeUserIds) ? excludeUserIds : [excludeUserIds];
+      if (ids.length === 1) {
+        query = query.where('global_notification_users.user_id', '!=', ids[0]);
+      } else if (ids.length > 1) {
+        query = query.where('global_notification_users.user_id', 'not in', ids);
+      }
+    }
+
+    const userIds = await query.execute();
+
+    if (userIds.length === 0) return;
+
+    const results = await Promise.allSettled(
+      userIds.map((u) => this.persistAndDeliver(u.user_id, payload)),
+    );
+
+    const failed = results.filter((r) => r.status === 'rejected');
+    if (failed.length > 0) {
+      this.logger.warn(`Failed to notify ${failed.length}/${userIds.length} global recipients`);
+    }
+  }
+
+  /**
    * Send notification to all account managers of a specific client.
+   * Global notification recipients are notified once (not once per manager).
    */
   async notifyClientManagers(
     clientId: string,
@@ -124,9 +175,15 @@ export class NotificationsService {
       .where('users.is_active', '=', true)
       .execute();
 
-    for (const manager of managers) {
-      await this.sendNotification(manager.id, payload);
+    const managerIds = managers.map((m) => m.id);
+
+    // Send to managers without per-manager global dispatch to avoid duplicates
+    for (const managerId of managerIds) {
+      await this.sendNotification(managerId, payload, true);
     }
+
+    // Notify global recipients once, excluding all managers to prevent duplicates
+    await this.notifyGlobalRecipients(payload, managerIds);
   }
 
   /**

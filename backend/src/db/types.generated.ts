@@ -206,6 +206,12 @@ export interface DomainSnapshots {
   registrar: string | null;
 }
 
+export interface GlobalNotificationUsers {
+  created_at: Generated<Timestamp>;
+  created_by: string | null;
+  user_id: string;
+}
+
 export interface InAppNotifications {
   created_at: Generated<Timestamp>;
   id: Generated<string>;
@@ -430,6 +436,7 @@ export interface DB {
   contracts: Contracts;
   domain_snapshots: DomainSnapshots;
   domains: Domains;
+  global_notification_users: GlobalNotificationUsers;
   in_app_notifications: InAppNotifications;
   incidents: Incidents;
   monitor_checks: MonitorChecks;

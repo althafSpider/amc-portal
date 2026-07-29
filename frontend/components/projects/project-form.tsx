@@ -418,7 +418,7 @@ export function ProjectForm(props: ProjectFormProps) {
           {/* Servers */}
           <div className="space-y-2">
             <Label>Servers</Label>
-            <Popover open={serverPopoverOpen} onOpenChange={setServerPopoverOpen}>
+            <Popover modal={true} open={serverPopoverOpen} onOpenChange={setServerPopoverOpen}>
               <PopoverTrigger asChild>
                 <button
                   type="button"

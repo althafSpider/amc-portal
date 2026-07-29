@@ -123,7 +123,9 @@ export default function MonitorDetailPage() {
             </div>
             <p className="text-muted-foreground flex items-center gap-1.5 mt-0.5">
               <Globe className="size-4 shrink-0" />
-              <span className="font-mono text-sm truncate">{monitor.target}</span>
+              <Link href={`${monitor.target}`} target="_blank">
+                <span className="font-mono text-sm truncate">{monitor.target}</span>
+              </Link> 
               <span className="text-muted-foreground/50 mx-1">·</span>
               <span>{TYPE_LABELS[monitor.check_type]}</span>
               {monitor.asset_id && monitor.asset_name && (
@@ -233,7 +235,9 @@ export default function MonitorDetailPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs text-muted-foreground font-medium">Target</p>
-                    <p className="text-sm font-mono truncate">{monitor.target}</p>
+                    <Link href={`${monitor.target}`} target="_blank">
+                      <p className="text-sm font-mono truncate">{monitor.target}</p>
+                    </Link>
                   </div>
                 </div>
 

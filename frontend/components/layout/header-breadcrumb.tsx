@@ -16,7 +16,7 @@ const pageTitles: Record<string, { label: string; icon?: React.ElementType }> = 
   "/incidents": { label: "Incidents" },
   "/audit-logs": { label: "Audit Logs" },
   "/expiry-calendar": { label: "Expiry Calendar" },
-  "/reminders": { label: "Notifications" },
+  "/reminders": { label: "Reminders" },
   "/users": { label: "Users" },
 }
 

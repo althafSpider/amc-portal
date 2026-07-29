@@ -27,6 +27,7 @@ import { MonitorModule } from './modules/monitor/monitor.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { HealthModule } from './modules/health/health.module';
 import { CleanupModule } from './modules/cleanup/cleanup.module';
+import { GlobalNotificationUsersModule } from './modules/global-notification-users/global-notification-users.module';
 import { AppConfigModule } from './modules/config/config.module';
 import { NotesModule } from './modules/notes/notes.module';
 import { ScopesModule } from './modules/scopes/scopes.module';
@@ -104,6 +105,7 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
     ScopesModule,
     AppConfigModule,
     WhatsappModule,
+    GlobalNotificationUsersModule,
   ],
   controllers: [AppController],
   providers: [

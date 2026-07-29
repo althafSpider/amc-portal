@@ -88,5 +88,4 @@ export class NotificationsController {
     return { message: 'All notifications marked as read' };
   }
 
-
 }

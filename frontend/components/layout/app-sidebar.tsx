@@ -16,8 +16,9 @@ import {
   AlertTriangle,
   ClipboardList,
   CalendarDays,
-  Bell,
+  BellRing,
   Settings,
+  UserCheck,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
@@ -69,13 +70,13 @@ const navItems = [
       { title: "Incidents", icon: AlertTriangle, href: "/incidents" },
     ],
   },
-  // admin view
   {
     group: "System",
     items: [
+      { title: "Global Recipients", icon: UserCheck, href: "/global-notification-users" },
+      { title: "Reminders", icon: BellRing, href: "/reminders" },
       { title: "Settings", icon: Settings, href: "/settings" },
       { title: "Audit Logs", icon: ClipboardList, href: "/audit-logs" },
-      { title: "Notifications", icon: Bell, href: "/reminders" },
     ],
   },
 ];
