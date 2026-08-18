@@ -16,9 +16,9 @@ export class CronBootstrapService implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap() {
-    await this.scheduleExistingDomains();
-    await this.scheduleExistingSslCertificates();
-    await this.scheduleReminderJobs();
+    // await this.scheduleExistingDomains();
+    // await this.scheduleExistingSslCertificates();
+    // await this.scheduleReminderJobs();
   }
 
   private async scheduleReminderJobs() {
