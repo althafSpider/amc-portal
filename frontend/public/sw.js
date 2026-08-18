@@ -8,10 +8,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
-/**
- * Read the API base URL cached by the page so the worker can reach the backend
- * (needed to re-subscribe when the push service rotates the subscription).
- */
+
 async function getApiBase() {
   try {
     const cache = await caches.open("amc-push-meta");

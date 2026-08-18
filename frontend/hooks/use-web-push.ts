@@ -27,18 +27,63 @@ function isPushSupported(): boolean {
 }
 
 /**
+ * Pre-flight check: verify the browser can reach Google's push service
+ * before attempting the full subscribe handshake. Uses a HEAD request
+ * to FCM's ping endpoint — fails fast if the network blocks it.
+ */
+async function checkPushConnectivity(): Promise<{ reachable: boolean; error?: string }> {
+  try {
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 5000)
+    await fetch("https://fcm.googleapis.com/fcm/ping", {
+      method: "HEAD",
+      mode: "no-cors",
+      signal: ctrl.signal,
+    })
+    clearTimeout(timer)
+    return { reachable: true }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (/abort/i.test(msg)) {
+      return { reachable: false, error: "Timed out reaching Google's push servers." }
+    }
+    return { reachable: false, error: msg }
+  }
+}
+
+/**
  * Turn a browser push error into something a user can act on.
+ * Includes the raw error in the console for debugging.
  */
 function describePushError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err)
+  console.error("[push] Raw subscribe error:", msg, err)
+
   if (/permission denied/i.test(msg)) {
-    return "The browser refused the push subscription. Make sure notifications are allowed for this site and try again."
+    return (
+      "The browser refused the push subscription. " +
+      "Make sure notifications are allowed for this site in your browser's address-bar settings " +
+      "(click the lock/tune icon → Notifications → Allow)."
+    )
   }
   if (/applicationServerKey|bad application server key/i.test(msg)) {
-    return "The server's push key is invalid. Check the VAPID configuration."
+    return "The server's push key is invalid. Ask an admin to regenerate the VAPID keys."
+  }
+  if (/service.?worker.*mime|mimeType|text\/html/i.test(msg)) {
+    return (
+      "The service worker file couldn't be loaded (wrong file type served). " +
+      "Try hard-refreshing the page (Ctrl+Shift+R)."
+    )
   }
   if (/network|fetch|failed to fetch|service error/i.test(msg)) {
-    return "The browser couldn't reach the push service. Check your internet connection and try again."
+    return (
+      "Your browser couldn't connect to the push notification service (Google FCM). " +
+      "This usually means your network blocks it — common on corporate Wi-Fi, " +
+      "VPNs, or in some regions. Try: " +
+      "1) A different network (e.g. mobile data), " +
+      "2) Firefox (uses Mozilla's push service instead of Google's), " +
+      "or 3) Ask your IT/network admin to allow *.google.com traffic."
+    )
   }
   return msg
 }
@@ -141,7 +186,18 @@ export function useWebPush() {
         return
       }
 
-      const registration = await navigator.serviceWorker.register("/sw.js")
+      // Step 1: Register the service worker
+      let registration: ServiceWorkerRegistration
+      try {
+        registration = await navigator.serviceWorker.register("/sw.js")
+      } catch (swErr) {
+        console.error("[push] SW registration failed:", swErr)
+        toast.error(
+          "Failed to load the background service worker. Try hard-refreshing the page (Ctrl+Shift+R). " +
+          "If the problem persists, check that push notifications aren't blocked by your browser.",
+        )
+        return
+      }
 
       // Cache the API base for the service worker (used on pushsubscriptionchange)
       try {
@@ -151,6 +207,7 @@ export function useWebPush() {
         // Non-fatal
       }
 
+      // Step 2: Fetch the VAPID public key from the server
       let publicKey: string | null = null
       try {
         const { data } = await apiClient.get<{ publicKey: string | null }>(
@@ -168,11 +225,36 @@ export function useWebPush() {
         return
       }
 
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey),
-      })
+      // Step 3: Pre-flight check — can this browser reach Google's push service?
+      const { reachable, error: reachError } = await checkPushConnectivity()
+      if (!reachable) {
+        console.warn("[push] Connectivity check failed:", reachError)
+        toast.error(
+          "Your network appears to block Google's push notification servers " +
+          `(FCM). ${reachError ?? ""} ` +
+          "Push notifications won't work on this network. Try a different " +
+          "network (e.g. mobile data) or Firefox (uses Mozilla's push service).",
+          { duration: 8000 },
+        )
+        return
+      }
 
+      // Step 4: Subscribe the browser to push
+      let subscription: PushSubscription
+      try {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
+        })
+      } catch (subErr) {
+        console.error("[push] Subscribe failed:", subErr)
+        toast.error(`Couldn't enable push notifications: ${describePushError(subErr)}`, {
+          duration: 10000,
+        })
+        return
+      }
+
+      // Step 5: Save the subscription to the backend
       const saved = await syncSubscription(subscription)
       if (!saved) {
         toast.error(
@@ -183,8 +265,10 @@ export function useWebPush() {
 
       toast.success("Push notifications enabled on this browser.")
     } catch (err) {
-      console.warn("Failed to enable push notifications:", err)
-      toast.error(`Couldn't enable push notifications: ${describePushError(err)}`)
+      console.error("[push] Unexpected error:", err)
+      toast.error(`Couldn't enable push notifications: ${describePushError(err)}`, {
+        duration: 10000,
+      })
     } finally {
       setIsLoading(false)
     }
