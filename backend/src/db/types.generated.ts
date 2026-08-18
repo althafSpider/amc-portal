@@ -286,7 +286,7 @@ export interface NotificationHistory {
   id: Generated<string>;
   provider_message_id: string | null;
   recipient: string;
-  reminder_id: string;
+  reminder_id: string | null;
   sent_at: Generated<Timestamp>;
   status: string;
 }
@@ -366,6 +366,17 @@ export interface ServiceProviders {
   updated_at: Generated<Timestamp>;
   updated_by_id: string | null;
   website: string | null;
+}
+
+export interface PushSubscriptions {
+  auth: string;
+  created_at: Generated<Timestamp>;
+  endpoint: string;
+  id: Generated<string>;
+  p256dh: string;
+  updated_at: Generated<Timestamp>;
+  user_agent: string | null;
+  user_id: string;
 }
 
 export interface SslCertificates {
@@ -449,6 +460,7 @@ export interface DB {
   scopes: Scopes;
   servers: Servers;
   service_providers: ServiceProviders;
+  push_subscriptions: PushSubscriptions;
   ssl_certificates: SslCertificates;
   ssl_snapshots: SslSnapshots;
   tags: Tags;

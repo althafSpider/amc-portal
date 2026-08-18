@@ -33,6 +33,7 @@ import { NotesModule } from './modules/notes/notes.module';
 import { ScopesModule } from './modules/scopes/scopes.module';
 import { CacheInvalidationInterceptor } from './common/interceptors/cache-invalidation.interceptor';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
+import { PushModule } from './modules/push/push.module';
 
 @Module({
   imports: [
@@ -105,6 +106,7 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
     ScopesModule,
     AppConfigModule,
     WhatsappModule,
+    PushModule,
     GlobalNotificationUsersModule,
   ],
   controllers: [AppController],

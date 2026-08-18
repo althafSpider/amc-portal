@@ -3,7 +3,7 @@ import { UUID, Timestamp } from "./common.types";
 export interface NotificationHistory {
   id: UUID;
 
-  reminder_id: string;
+  reminder_id: string | null;
 
   recipient: string;
 

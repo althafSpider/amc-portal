@@ -22,8 +22,11 @@ export const config = {
     // Protect all app routes except:
     // - /api/*              (backend handles its own auth via JWT guard)
     // - /login              (sign-in page)
+    // - /sw.js              (push notification service worker — must be fetchable
+    //                        by the browser outside the session)
+    // - static assets       (notification icons, fonts, images)
     // - /_next/*            (Next.js internals)
     // - favicon.ico         (browser icon)
-    '/((?!api|login|_next/static|_next/image|favicon.ico).*)',
+    '/((?!api|login|sw\\.js|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|woff2?|css)$|_next/static|_next/image|favicon\\.ico).*)',
   ],
 }

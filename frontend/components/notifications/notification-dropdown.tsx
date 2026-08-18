@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Bell, CheckCheck, Loader2, AlertTriangle, Info, AlertCircle, ExternalLink } from "lucide-react"
+import { Bell, BellRing, BellOff, CheckCheck, Loader2, AlertTriangle, Info, AlertCircle, ExternalLink, Settings2 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { Button } from "@/components/ui/button"
 import {
@@ -17,6 +17,7 @@ import {
 import { cn } from "@/lib/utils"
 import { useInAppNotifications } from "@/hooks/use-in-app-notifications"
 import type { NotificationEvent } from "@/hooks/use-in-app-notifications"
+import { useWebPush } from "@/hooks/use-web-push"
 
 const severityIcon = {
   critical: AlertTriangle,
@@ -40,6 +41,7 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false)
   const router = useRouter()
   const { useUnreadCount, useNotificationsList, useMarkAsRead, useMarkAllAsRead } = useInAppNotifications()
+  const { isSupported, isSubscribed, isLoading: isPushLoading, enable, disable } = useWebPush()
 
   const { data: unreadCount = 0 } = useUnreadCount()
   const { data: notificationsData, isLoading } = useNotificationsList(1, 10)
@@ -159,6 +161,65 @@ export function NotificationBell() {
               })}
             </DropdownMenuGroup>
           )}
+        </div>
+        <div className="border-t border-border/40">
+        {isSupported && (
+          <div className="px-4 py-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                {isSubscribed ? (
+                  <BellRing className="size-4 shrink-0 text-emerald-500" />
+                ) : (
+                  <BellOff className="size-4 shrink-0 text-muted-foreground" />
+                )}
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">Push notifications</p>
+                  <p className="text-[11px] text-muted-foreground truncate">
+                    {isSubscribed
+                      ? "Enabled on this browser"
+                      : "Get alerts even when the tab is closed"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isSubscribed}
+                aria-label="Toggle push notifications"
+                disabled={isPushLoading}
+                onClick={() => (isSubscribed ? disable() : enable())}
+                className={cn(
+                  "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors outline-none",
+                  "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  "disabled:opacity-60 disabled:cursor-not-allowed",
+                  isSubscribed ? "bg-emerald-500" : "bg-input",
+                )}
+              >
+                {isPushLoading ? (
+                  <Loader2 className="mx-auto size-3.5 animate-spin text-muted-foreground" />
+                ) : (
+                  <span
+                    className={cn(
+                      "inline-block size-4 transform rounded-full bg-white shadow transition-transform",
+                      isSubscribed ? "translate-x-6" : "translate-x-1",
+                    )}
+                  />
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false)
+            router.push("/notifications")
+          }}
+          className="flex w-full items-center gap-2 border-t border-border/40 px-4 py-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+        >
+          <Settings2 className="size-3.5 shrink-0" />
+          Notification settings
+        </button>
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

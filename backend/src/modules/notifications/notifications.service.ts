@@ -4,6 +4,7 @@ import { Kysely } from 'kysely';
 import { DB } from '../../db/types.generated';
 import { Observable, Subject } from 'rxjs';
 import { v4 as uuid } from 'uuid';
+import { PushService } from '../push/push.service';
 
 export interface NotificationEvent {
   id: string;
@@ -33,6 +34,7 @@ export class NotificationsService {
 
   constructor(
     @InjectKysely() private readonly db: Kysely<DB>,
+    private readonly pushService: PushService,
   ) {}
 
   /**
@@ -120,6 +122,21 @@ export class NotificationsService {
     if (subject) {
       subject.next(event);
     }
+
+    // Deliver browser push notification to this user's devices (fire-and-forget)
+    this.pushService
+      .sendToUser(userId, {
+        type: payload.type,
+        title: payload.title,
+        message: payload.message,
+        link: payload.link,
+        severity: payload.severity,
+      })
+      .catch((err) => {
+        this.logger.warn(
+          `Failed to send web push to user ${userId}: ${err instanceof Error ? err.message : err}`,
+        );
+      });
 
     return event;
   }

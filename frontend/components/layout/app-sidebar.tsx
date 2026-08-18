@@ -19,6 +19,7 @@ import {
   BellRing,
   Settings,
   UserCheck,
+  Bell,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
@@ -171,6 +172,12 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="right" align="end" className="w-48">
+                <DropdownMenuItem asChild>
+                  <Link href="/notifications">
+                    <Bell className="mr-2 size-4" />
+                    Notification preferences
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => signOut({ callbackUrl: "/login" })}
                 >
