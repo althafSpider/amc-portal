@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Observable, Subject } from 'rxjs';
 import { InjectKysely } from 'nestjs-kysely';
 import { Kysely, sql } from 'kysely';
 import { DB } from '../../db/types.generated';
@@ -231,6 +232,121 @@ export class MonitorService {
       .execute();
 
     return { message: 'Monitor deleted successfully' };
+  }
+
+  // ── Bulk Check ──
+
+  triggerCheckAllStream(): Observable<{ type: string; data: any }> {
+    const subject = new Subject<{ type: string; data: any }>();
+
+    // Run async work outside the observable chain
+    (async () => {
+      try {
+        const enabledMonitors = await this.db
+          .selectFrom('monitors')
+          .select(['id', 'name'])
+          .where('enabled', '=', true)
+          .execute();
+
+        const total = enabledMonitors.length;
+
+        if (total === 0) {
+          subject.next({
+            type: 'message',
+            data: { event: 'complete', message: 'No enabled monitors found to check', total: 0, triggered: 0, failed: 0 },
+          });
+          subject.complete();
+          return;
+        }
+
+        subject.next({ type: 'message', data: { event: 'start', total } });
+
+        let triggered = 0;
+        let failed = 0;
+        const errors: string[] = [];
+
+        for (let i = 0; i < enabledMonitors.length; i++) {
+          const monitor = enabledMonitors[i];
+          try {
+            await this.executeCheck(monitor);
+            triggered++;
+          } catch (err: any) {
+            failed++
+            errors.push(`${monitor.name}: ${err.message}`);
+            this.logger.error(`Failed to check monitor ${monitor.id} (${monitor.name}): ${err.message}`);
+          }
+
+          subject.next({
+            type: 'message',
+            data: {
+              event: 'progress',
+              current: i + 1,
+              total,
+              monitorName: monitor.name,
+              status: failed > 0 && errors[errors.length - 1]?.startsWith(monitor.name) ? 'error' : 'ok',
+            },
+          });
+        }
+
+        subject.next({
+          type: 'message',
+          data: {
+            event: 'complete',
+            message: `Refresh complete: ${triggered} of ${total} monitors checked successfully${failed > 0 ? `, ${failed} failed` : ''}`,
+            total,
+            triggered,
+            failed,
+            errors: errors.length > 0 ? errors : undefined,
+          },
+        });
+      } catch (err: any) {
+        subject.next({ type: 'message', data: { event: 'error', message: err.message } });
+      } finally {
+        subject.complete();
+      }
+    })();
+
+    return subject.asObservable();
+  }
+
+  async triggerCheckAll() {
+    const enabledMonitors = await this.db
+      .selectFrom('monitors')
+      .select(['id', 'name'])
+      .where('enabled', '=', true)
+      .execute();
+
+    if (enabledMonitors.length === 0) {
+      return {
+        message: 'No enabled monitors found to check',
+        total: 0,
+        triggered: 0,
+        failed: 0,
+      };
+    }
+
+    let triggered = 0;
+    let failed = 0;
+    const errors: string[] = [];
+
+    for (const monitor of enabledMonitors) {
+      try {
+        await this.executeCheck(monitor);
+        triggered++;
+      } catch (err: any) {
+        failed++;
+        errors.push(`${monitor.name}: ${err.message}`);
+        this.logger.error(`Failed to check monitor ${monitor.id} (${monitor.name}): ${err.message}`);
+      }
+    }
+
+    return {
+      message: `Refresh complete: ${triggered} of ${enabledMonitors.length} monitors checked successfully${failed > 0 ? `, ${failed} failed` : ''}`,
+      total: enabledMonitors.length,
+      triggered,
+      failed,
+      errors: errors.length > 0 ? errors : undefined,
+    };
   }
 
   // ── Check Execution ──

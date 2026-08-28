@@ -5,9 +5,19 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { MonitorTable } from "./monitor-table"
-import { useMonitors, useCreateMonitor, useUpdateMonitor, useDeleteMonitor, useTriggerCheck } from "@/hooks/use-monitors"
+import { useMonitors, useCreateMonitor, useUpdateMonitor, useDeleteMonitor, useTriggerCheck, useTriggerCheckAll, type CheckAllProgress } from "@/hooks/use-monitors"
 import { useDebounce } from "@/hooks/use-debounce"
 import { SmoothSelect } from "@/components/ui/smooth-select"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/r-alert-dialog"
 import {
   Pagination,
   PaginationContent,
@@ -17,7 +27,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
-import { Search, Plus } from "lucide-react"
+import { Search, Plus, RefreshCw } from "lucide-react"
 import type { MonitorListItem, CreateMonitorPayload } from "@/types/api"
 import type { SortField } from "./monitor-table"
 import { MonitorCreateDrawer } from "./monitor-create-drawer"
@@ -57,6 +67,7 @@ export function MonitorsPageContent() {
   const [createOpen, setCreateOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [editingMonitor, setEditingMonitor] = useState<MonitorListItem | null>(null)
+  const [refreshAllOpen, setRefreshAllOpen] = useState(false)
 
   useEffect(() => {
     if (search !== inputValue && search !== debouncedSearch) {
@@ -91,6 +102,16 @@ export function MonitorsPageContent() {
   const { mutate: updateMonitor, isPending: isUpdating } = useUpdateMonitor()
   const { mutate: deleteMonitor } = useDeleteMonitor()
   const { mutate: triggerCheck } = useTriggerCheck()
+
+  const [refreshProgress, setRefreshProgress] = useState<CheckAllProgress | null>(null)
+  const handleRefreshProgress = useCallback((progress: CheckAllProgress) => {
+    setRefreshProgress(progress)
+  }, [])
+  const handleRefreshComplete = useCallback(() => {
+    // Keep progress visible briefly so the user sees the completion state
+    setTimeout(() => setRefreshProgress(null), 2000)
+  }, [])
+  const { mutate: triggerCheckAll, isPending: isRefreshingAll } = useTriggerCheckAll(handleRefreshProgress, handleRefreshComplete)
 
   const updateParams = useCallback(
     (updates: Record<string, string | undefined>) => {
@@ -184,10 +205,21 @@ export function MonitorsPageContent() {
               Monitor uptime and health of your endpoints
             </p>
           </div>
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="size-4 mr-1.5" />
-            New Monitor
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setRefreshAllOpen(true)}
+              disabled={isRefreshingAll}
+            >
+              <RefreshCw className={`size-3.5 mr-1.5 ${isRefreshingAll ? 'animate-spin' : ''}`} />
+              {isRefreshingAll ? 'Refreshing...' : 'Refresh All Monitors'}
+            </Button>
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus className="size-4 mr-1.5" />
+              New Monitor
+            </Button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -323,6 +355,59 @@ export function MonitorsPageContent() {
         />
       )}
 
+      {/* Refresh All Progress */}
+      {isRefreshingAll && refreshProgress && (
+        <div className="rounded-lg border border-border/60 bg-muted/30 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <RefreshCw className="size-4 animate-spin text-primary" />
+              <span className="text-sm font-medium">
+                {refreshProgress.type === 'start'
+                  ? `Starting check of ${refreshProgress.data.total ?? 0} monitors...`
+                  : refreshProgress.type === 'progress'
+                  ? `Checking ${refreshProgress.data.monitorName ?? ''} (${refreshProgress.data.current ?? 0}/${refreshProgress.data.total ?? 0})...`
+                  : 'Finalizing...'}`
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {refreshProgress.data.current ?? 0} / {refreshProgress.data.total ?? 0}
+            </span>
+          </div>
+          <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+            <div
+              className="h-full bg-primary rounded-full transition-all duration-300 ease-out"
+              style={{
+                width: `${refreshProgress.data.total
+                  ? ((refreshProgress.data.current ?? 0) / refreshProgress.data.total) * 100
+                  : 0}%`,
+              }}
+            />
+          </div>
+          {refreshProgress.type === 'progress' && refreshProgress.data.status === 'error' && (
+            <p className="text-xs text-red-500 mt-2">
+              Failed to check {refreshProgress.data.monitorName ?? 'monitor'}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Refresh All Confirmation */}
+      <AlertDialog open={refreshAllOpen} onOpenChange={(open) => { setRefreshAllOpen(open); if (!open) setRefreshProgress(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Refresh All Monitors</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will immediately check all enabled monitors and may create new incidents for any that are down. Continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { triggerCheckAll(); setRefreshAllOpen(false) }}>
+              Refresh Now
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

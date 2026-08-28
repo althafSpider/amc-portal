@@ -1,5 +1,6 @@
 "use client"
 
+import { useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import apiClient from "@/lib/api-client"
@@ -109,6 +110,115 @@ export function useTriggerCheck() {
       qc.invalidateQueries({ queryKey: [MONITORS_KEY] })
     },
     onError: (err: Error) => toast.error(err.message),
+  })
+}
+
+export interface CheckAllProgress {
+  type: 'start' | 'progress' | 'complete' | 'error'
+  data: {
+    current?: number
+    total?: number
+    monitorName?: string
+    status?: 'ok' | 'error'
+    message?: string
+    triggered?: number
+    failed?: number
+    errors?: string[]
+  }
+}
+
+/** Raw shape sent by the SSE backend (NestJS consumes `type` as the event name) */
+interface SsePayload {
+  event: 'start' | 'progress' | 'complete' | 'error'
+  total?: number
+  current?: number
+  monitorName?: string
+  status?: 'ok' | 'error'
+  message?: string
+  triggered?: number
+  failed?: number
+  errors?: string[]
+}
+
+export function useTriggerCheckAll(
+  onProgress?: (progress: CheckAllProgress) => void,
+  onComplete?: () => void,
+) {
+  const qc = useQueryClient()
+
+  const triggerCheckAllMutation = useCallback(
+    () =>
+      new Promise<CheckAllProgress['data']>((resolve, reject) => {
+        const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+
+        fetch(`${API_BASE}/monitor/check-all-stream`, {
+          headers: { Accept: 'text/event-stream' },
+          credentials: 'include',
+        }).then(async (res) => {
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ message: 'Request failed' }))
+            reject(new Error(err.message || 'Request failed'))
+            return
+          }
+
+          const reader = res.body!.getReader()
+          const decoder = new TextDecoder()
+          let buffer = ''
+
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            buffer += decoder.decode(value, { stream: true })
+            const lines = buffer.split('\n')
+            buffer = lines.pop()!
+
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const raw: SsePayload = JSON.parse(line.slice(6))
+                  const event: CheckAllProgress = {
+                    type: raw.event,
+                    data: {
+                      current: raw.current,
+                      total: raw.total,
+                      monitorName: raw.monitorName,
+                      status: raw.status,
+                      message: raw.message,
+                      triggered: raw.triggered,
+                      failed: raw.failed,
+                      errors: raw.errors,
+                    },
+                  }
+                  onProgress?.(event)
+
+                  if (raw.event === 'complete') {
+                    resolve(event.data)
+                  } else if (raw.event === 'error') {
+                    reject(new Error(raw.message || 'Stream failed'))
+                  }
+                } catch {
+                  // skip malformed lines
+                }
+              }
+            }
+          }
+        }).catch(reject)
+      }),
+    [onProgress],
+  )
+
+  return useMutation({
+    mutationFn: triggerCheckAllMutation,
+    onSuccess: (res) => {
+      toast.success(res.message)
+      qc.invalidateQueries({ queryKey: [MONITORS_KEY] })
+      onComplete?.()
+    },
+    onError: (err: Error) => {
+      toast.error(err.message)
+      onComplete?.()
+    },
   })
 }
 

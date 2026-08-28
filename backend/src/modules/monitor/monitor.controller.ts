@@ -11,7 +11,9 @@ import {
   HttpStatus,
   ParseUUIDPipe,
   ParseIntPipe,
+  Sse,
 } from '@nestjs/common';
+import { Observable } from 'rxjs';
 import { ResponseMessage } from '../../common/decorators/response-message.decorator';
 import { AuditLog } from '../../common/decorators/audit-log.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -41,6 +43,18 @@ export class MonitorController {
   @HttpCode(HttpStatus.OK)
   async list(@Query() dto: ListMonitorsDto) {
     return this.monitorService.list(dto);
+  }
+
+  @Sse('check-all-stream')
+  triggerCheckAllStream(): Observable<{ type: string; data: any }> {
+    return this.monitorService.triggerCheckAllStream();
+  }
+
+  @Post('check-all')
+  @HttpCode(HttpStatus.OK)
+  @ResponseMessage('All monitors check completed')
+  async triggerCheckAll() {
+    return this.monitorService.triggerCheckAll();
   }
 
   @Get(':id')

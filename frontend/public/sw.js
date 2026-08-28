@@ -95,7 +95,7 @@ self.addEventListener("pushsubscriptionchange", (event) => {
 
         const subscription = await self.registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey),
+          applicationServerKey: urlBase64ToUint8Array(publicKey0),
         });
 
         const windowClients = await clients.matchAll({
