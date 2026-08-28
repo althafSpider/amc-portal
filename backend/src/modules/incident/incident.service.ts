@@ -239,6 +239,20 @@ export class IncidentService {
     return { message: 'Incident deleted successfully' };
   }
 
+  async bulkRemove(ids: string[]) {
+    if (ids.length === 0) {
+      return { message: 'No incidents selected', deleted: 0 };
+    }
+
+    await this.db
+      .deleteFrom('incidents')
+      .where('id', 'in', ids)
+      .execute();
+
+    this.logger.log(`Bulk deleted ${ids.length} incident(s)`);
+    return { message: `${ids.length} incident(s) deleted successfully`, deleted: ids.length };
+  }
+
   // ── Expiry-to-Incident Cron Jobs ──
 
   @Cron('0 */6 * * *') // Every 6 hours

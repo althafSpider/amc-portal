@@ -79,6 +79,21 @@ export function useDeleteIncident() {
   })
 }
 
+export function useBulkDeleteIncidents() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { data } = await apiClient.post<ApiResponse<{ deleted: number }>>(`/incident/bulk-delete`, { ids })
+      return data
+    },
+    onSuccess: (res) => {
+      toast.success(res.message)
+      qc.invalidateQueries({ queryKey: [INCIDENTS_KEY] })
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+}
+
 export function useCheckExpiredIncidents() {
   const qc = useQueryClient()
   return useMutation({

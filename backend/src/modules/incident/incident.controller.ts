@@ -88,6 +88,14 @@ export class IncidentController {
     };
   }
 
+  @Post('bulk-delete')
+  @HttpCode(HttpStatus.OK)
+  @ResponseMessage('Incidents deleted successfully')
+  @AuditLog({ entityType: 'incident' })
+  async bulkRemove(@Body() body: { ids: string[] }) {
+    return this.incidentService.bulkRemove(body.ids);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   @ResponseMessage('Incident deleted successfully')

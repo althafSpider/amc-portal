@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, useMemo } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
@@ -8,6 +8,7 @@ import {
   useResolveIncident,
   useAcknowledgeIncident,
   useDeleteIncident,
+  useBulkDeleteIncidents,
   useCheckExpiredIncidents,
 } from "@/hooks/use-incidents";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { Checkbox } from "@/components/ui/r-checkbox";
 import {
   AlertTriangle,
   AlertCircle,
@@ -120,6 +122,7 @@ export function IncidentsPageContent() {
   const { mutate: acknowledgeIncident, isPending: isAcknowledging } =
     useAcknowledgeIncident();
   const { mutate: deleteIncident } = useDeleteIncident();
+  const { mutate: bulkDeleteIncidents, isPending: isBulkDeleting } = useBulkDeleteIncidents();
   const { mutate: checkExpired, isPending: isCheckingExpired } =
     useCheckExpiredIncidents();
   const [refreshProgress, setRefreshProgress] = useState<CheckAllProgress | null>(null);
@@ -132,8 +135,31 @@ export function IncidentsPageContent() {
   const { mutate: triggerCheckAll, isPending: isRefreshingAll } = useTriggerCheckAll(handleRefreshProgress, handleRefreshComplete);
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [refreshAllOpen, setRefreshAllOpen] = useState(false);
   const deleteIncidentItem = data?.data.find((i) => i.id === deleteId);
+
+  const allVisibleIds = useMemo(() => data?.data.map((i) => i.id) ?? [], [data]);
+  const allSelected = allVisibleIds.length > 0 && allVisibleIds.every((id) => selectedIds.has(id));
+  const someSelected = allVisibleIds.some((id) => selectedIds.has(id));
+
+  const toggleSelectAll = useCallback(() => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(allVisibleIds));
+    }
+  }, [allSelected, allVisibleIds]);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   const updateParams = useCallback(
     (updates: Record<string, string | undefined>) => {
@@ -215,11 +241,29 @@ export function IncidentsPageContent() {
           </div>
         </div>
 
-        {/* Results summary */}
+        {/* Results summary + bulk actions */}
         {!isLoading && (
-          <p className="text-xs text-muted-foreground">
-            Showing {data?.data.length ?? 0} of {total} incidents
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              Showing {data?.data.length ?? 0} of {total} incidents
+              {selectedIds.size > 0 && (
+                <span className="ml-2 text-foreground font-medium">
+                  ({selectedIds.size} selected)
+                </span>
+              )}
+            </p>
+            {selectedIds.size > 0 && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setBulkDeleteOpen(true)}
+                disabled={isBulkDeleting}
+              >
+                <Trash2 className="size-3.5 mr-1.5" />
+                Delete {selectedIds.size} selected
+              </Button>
+            )}
+          </div>
         )}
 
         {/* Table */}
@@ -227,6 +271,12 @@ export function IncidentsPageContent() {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/30">
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={toggleSelectAll}
+                  />
+                </TableHead>
                 <TableHead>Severity</TableHead>
                 <TableHead>Monitor</TableHead>
                 <TableHead>Project</TableHead>
@@ -241,7 +291,7 @@ export function IncidentsPageContent() {
               {isLoading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 8 }).map((_, j) => (
+                    {Array.from({ length: 9 }).map((_, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-4 w-full" />
                       </TableCell>
@@ -249,25 +299,29 @@ export function IncidentsPageContent() {
                   </TableRow>
                 ))
               ) : data?.data.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={8}
+                <TableRow>                <TableCell colSpan={9}
                     className="text-center py-12 text-muted-foreground"
                   >
                     No incidents found
                   </TableCell>
-                </TableRow>
-              ) : (
+                </TableRow>                ) : (
                 data?.data.map((incident) => {
                   const severityCfg = SEVERITY_CONFIG[incident.severity];
                   const SeverityIcon = severityCfg.icon;
                   const isResolved = !!incident.resolved_at;
+                  const isSelected = selectedIds.has(incident.id);
                   return (
                     <TableRow
                       key={incident.id}
-                      className="cursor-pointer group transition-colors hover:bg-muted/40"
+                      className={`cursor-pointer group transition-colors hover:bg-muted/40 ${isSelected ? 'bg-accent/50' : ''}`}
                       onClick={() => router.push(`/incidents/${incident.id}`)}
                     >
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleSelect(incident.id)}
+                        />
+                      </TableCell>
                       <TableCell>
                         <Badge
                           variant="dot"
@@ -431,6 +485,34 @@ export function IncidentsPageContent() {
             </TableBody>
           </Table>
         </div>
+
+        {/* Bulk Delete Confirmation */}
+        <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete {selectedIds.size} Incident(s)</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete {selectedIds.size} selected incident(s)? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  bulkDeleteIncidents(Array.from(selectedIds), {
+                    onSuccess: () => {
+                      setSelectedIds(new Set());
+                      setBulkDeleteOpen(false);
+                    },
+                  });
+                }}
+                className="bg-destructive hover:bg-destructive/80"
+              >
+                Delete {selectedIds.size} Incident(s)
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Pagination */}
         {totalPages > 1 && (

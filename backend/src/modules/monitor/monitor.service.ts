@@ -244,7 +244,7 @@ export class MonitorService {
       try {
         const enabledMonitors = await this.db
           .selectFrom('monitors')
-          .select(['id', 'name'])
+          .selectAll()
           .where('enabled', '=', true)
           .execute();
 
@@ -312,7 +312,7 @@ export class MonitorService {
   async triggerCheckAll() {
     const enabledMonitors = await this.db
       .selectFrom('monitors')
-      .select(['id', 'name'])
+      .selectAll()
       .where('enabled', '=', true)
       .execute();
 
